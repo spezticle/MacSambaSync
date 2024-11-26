@@ -1,5 +1,5 @@
 # General configuration
-app_name: MyCoolApp
+app_name: MacShareSync
 version: 1.0.0
 log_level: INFO
 
