@@ -116,3 +116,4 @@ fi
 
 # Step 6: Ready to execute the workhorse script
 echo -e "${BOLD_GREEN}Setup complete. Ready to execute ${WORKHORSE_SCRIPT}.${RESET}"
+"$VENV_PATH/bin/python" "$WORKHORSE_SCRIPT"

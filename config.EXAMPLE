@@ -1,0 +1,26 @@
+# Configuration for mounting SMB and NFS shares
+# Edit this file to define the shares you want to mount.
+
+# Base directory for mounting shares (default: /Volumes)
+# Optional. Leave it as /Volumes unless you have specific requirements.
+mount_base: /Volumes
+
+# Define SMB and NFS shares to mount
+mounts:
+  smb:
+    # Example SMB share
+    - name: ExampleSMBShare       # (Required) Logical name for the share
+      host: 192.168.1.100         # (Required) IP or hostname of the SMB server
+      path: /share1               # (Required) Path to the shared resource on the server
+      mount_point: smb-share1     # (Optional) Subdirectory under mount_base (e.g., /Volumes/smb-share1)
+      username: myuser            # (Required) SMB username
+      password: mypassword        # (Required) SMB password
+      options: "vers=3.0"         # (Optional) Additional mount options
+
+  nfs:
+    # Example NFS share
+    - name: ExampleNFSShare       # (Required) Logical name for the share
+      host: 192.168.1.102         # (Required) IP or hostname of the NFS server
+      path: /exports/data         # (Required) Path to the shared resource on the server
+      mount_point: nfs-data       # (Required) Subdirectory under mount_base (e.g., /Volumes/nfs-data)
+      options: "rsize=8192,wsize=8192,timeo=14,intr"  # (Optional) Additional mount options

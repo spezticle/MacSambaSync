@@ -1,0 +1,35 @@
+# General configuration
+app_name: MyCoolApp
+version: 1.0.0
+log_level: INFO
+
+# Mount configuration
+mount_base: /Volumes  # Base directory for all mounts (modifiable by the user)
+mounts:
+  smb:
+    - name: Share1
+      host: 10.49.0.134
+      path: /p19-debrief
+#      mount_point: /p19-debrief
+      username: p19
+      password: w0m3nR0CK!
+      options: 
+#    - name: Share2
+#      host: 192.168.1.101
+#      path: /share2
+#      mount_point: /mnt/share2
+#      username: anotheruser
+#      password: anotherpassword
+#      options: vers=2.1
+
+  nfs:
+#    - name: NFS1
+#      host: 192.168.1.102
+#      path: /exports/data
+#      mount_point: /mnt/data
+#      options: rsize=8192,wsize=8192,timeo=14,intr
+#    - name: NFS2
+#      host: 192.168.1.103
+#      path: /exports/backups
+#      mount_point: /mnt/backups
+#      options: nolock

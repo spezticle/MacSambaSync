@@ -1,79 +1,148 @@
 import os
-import sys
-import subprocess
 import yaml
+import subprocess
 
-# Path to the virtual environment
-#VENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv")
-VENV_PATH = "/opt/venv/MacSambaSync"
-# Path to the config.yaml file
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
-def create_venv():
+def load_config(file_path="config.yaml"):
     """
-    Ensures a virtual environment exists at VENV_PATH.
-    If it does not exist, creates it.
+    Load configuration from a YAML file.
     """
     try:
-        if not os.path.exists(VENV_PATH):
-            print(f"Virtual environment not found at {VENV_PATH}. Creating one...")
-            subprocess.check_call([sys.executable, "-m", "venv", VENV_PATH])
-            print("Virtual environment created successfully.")
-        else:
-            print(f"Virtual environment already exists at {VENV_PATH}.")
-    except Exception as e:
-        print(f"Error creating virtual environment: {e}")
-        sys.exit(1)
-
-def load_config():
-    """
-    Loads the configuration from the config.yaml file.
-    Ensures the file exists and is valid YAML.
-    """
-    try:
-        if not os.path.exists(CONFIG_FILE):
-            raise FileNotFoundError(f"Configuration file not found: {CONFIG_FILE}")
-        
-        with open(CONFIG_FILE, "r") as f:
+        with open(file_path, "r") as f:
             config = yaml.safe_load(f)
-        
-        if not isinstance(config, dict):
-            raise ValueError("Configuration file must contain a valid dictionary.")
-        
         print("Configuration loaded successfully.")
         return config
-    except Exception as e:
-        print(f"Error loading configuration: {e}")
-        sys.exit(1)
+    except FileNotFoundError:
+        print(f"Error: {file_path} not found.")
+        exit(1)
+    except yaml.YAMLError as e:
+        print(f"Error parsing YAML: {e}")
+        exit(1)
 
-def ensure_venv_activation():
+
+def is_mounted(target):
     """
-    Ensures that the script is executed using the Python interpreter from the venv.
+    Check if the target (mount point or share) is already mounted.
     """
-    if sys.prefix != VENV_PATH:
-        print(f"Script is not using the virtual environment at {VENV_PATH}.")
-        print("Please activate the venv or run the script with the venv Python interpreter.")
-        print(f"Example: {os.path.join(VENV_PATH, 'bin', 'python')} {__file__}")
-        sys.exit(1)
+    try:
+        mount_output = subprocess.check_output(["mount"], text=True)
+        for line in mount_output.splitlines():
+            if target in line:
+                return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error checking mounts: {e}")
+        exit(1)
+    return False
+
+
+def ensure_mount_directory(mount_path):
+    """
+    Ensure the specified mount directory exists with appropriate permissions.
+    If it doesn't exist, use sudo to create and assign permissions to the user.
+    """
+    if not os.path.exists(mount_path):
+        print(f"Creating mount directory: {mount_path}")
+        try:
+            # Create the directory with sudo
+            subprocess.run(["sudo", "mkdir", "-p", mount_path], check=True)
+            # Assign ownership to the current user and their primary group
+            user = os.getenv("USER")
+            group = subprocess.check_output(["id", "-gn"], text=True).strip()
+            subprocess.run(["sudo", "chown", f"{user}:{group}", mount_path], check=True)
+            print(f"Successfully created and assigned permissions for {mount_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error creating or assigning permissions for {mount_path}: {e}")
+            exit(1)
+    else:
+        print(f"Mount directory already exists: {mount_path}")
+
+
+def mount_smb(share):
+    """
+    Mount an SMB share dynamically or under a specified mount_base.
+    """
+    if 'mount_point' in share:
+        # If a specific mount point is defined, ensure the directory exists
+        mount_point = os.path.join("/Volumes", share['mount_point'])
+        if is_mounted(mount_point):
+            print(f"SMB share {share['name']} is already mounted at {mount_point}. Skipping.")
+            return
+        ensure_mount_directory(mount_point)
+        print(f"Mounting SMB share: {share['name']} -> {mount_point}")
+        options = share.get("options", "")
+        command = [
+            "mount",
+            "-t", "smbfs",
+            f"//{share['username']}:{share['password']}@{share['host']}{share['path']}",
+            mount_point
+        ]
+    else:
+        # Use the `open` command for dynamic mounting
+        share_url = f"smb://{share['username']}:{share['password']}@{share['host']}{share['path']}"
+        if is_mounted(share_url):
+            print(f"SMB share {share['name']} is already mounted dynamically. Skipping.")
+            return
+        print(f"Mounting SMB share dynamically: {share['name']} (macOS will assign a mount point)")
+        command = ["open", share_url]
+
+    try:
+        subprocess.run(command, check=True)
+        print(f"Successfully mounted SMB share: {share['name']}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error mounting SMB share {share['name']}: {e}")
+
+
+def mount_nfs(share):
+    """
+    Mount an NFS share under the specified mount_base.
+    """
+    mount_point = os.path.join("/Volumes", share['mount_point'])
+    if is_mounted(mount_point):
+        print(f"NFS share {share['name']} is already mounted at {mount_point}. Skipping.")
+        return
+    ensure_mount_directory(mount_point)
+    print(f"Mounting NFS share: {share['name']} -> {mount_point}")
+
+    # Build the NFS mount command
+    options = share.get("options", "")
+    command = [
+        "mount",
+        "-t", "nfs",
+        f"{share['host']}:{share['path']}",
+        mount_point
+    ]
+
+    if options:
+        command.append("-o")
+        command.append(options)
+
+    try:
+        subprocess.run(command, check=True)
+        print(f"Successfully mounted NFS share: {share['name']}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error mounting NFS share {share['name']}: {e}")
+
 
 def main():
     """
-    Main function of the script.
-    Ensures a venv is configured, configuration is loaded, and the script is executed within the venv.
+    Main function to load configuration and mount shares.
     """
-    print("Starting script...")
-    
-    # Ensure the virtual environment exists
-    create_venv()
-    
-    # Ensure the script is running within the venv
-    ensure_venv_activation()
-    
-    # Load the configuration
-    config = load_config()
-    
-    # Success message
-    print("Script executed successfully!")
+    config = load_config()  # Load config.yaml
+    smb_shares = config.get("mounts", {}).get("smb", [])
+    nfs_shares = config.get("mounts", {}).get("nfs", [])
+
+    # Process SMB shares
+    if smb_shares:
+        print("Processing SMB shares...")
+        for smb in smb_shares:
+            mount_smb(smb)
+
+    # Process NFS shares
+    if nfs_shares:
+        print("Processing NFS shares...")
+        for nfs in nfs_shares:
+            mount_nfs(nfs)
+
 
 if __name__ == "__main__":
     main()
